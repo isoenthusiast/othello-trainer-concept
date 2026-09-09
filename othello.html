@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Othello Trainer Concept</title>
-<!-- BUILT single-file edition (built 2026-09-09T05:33:59.590Z) -->
+<!-- BUILT single-file edition (built 2026-09-09T05:43:34.820Z) -->
 <style>
 * { box-sizing: border-box; }
 body {
@@ -523,7 +523,10 @@ footer code { background: #2a2a44; padding: 0 .3rem; border-radius: 4px; }
 
   /**
    * The "HELP ME" coach: returns the top-3 moves with a deterministic reason each.
-   * reason = a plain-english sentence assembled from feature deltas (no LLM).
+   * reason = plain-english sentence(s) assembled from feature deltas (no LLM):
+   *   - your move's immediate effect (mobility / corner / edge / X-square / flips)
+   *   - the engine's BEST reply on the board after your move, and what it does to you
+   *     ("White plays h7 to capture the edge, flipping 2 discs") — the opponent's next step.
    * @param {number[]} board
    * @param {number} player
    * @param {number} topN   how many moves to return (default 3)
@@ -534,10 +537,18 @@ footer code { background: #2a2a44; padding: 0 .3rem; border-radius: 4px; }
     depth = depth || 6;
     const ranked = rankMoves(board, player, depth);
     const out = [];
+    // Honest context: if every candidate is strongly negative, the position is losing.
+    const losing = ranked.length && ranked[0].score < -180;
     for (let k = 0; k < Math.min(topN, ranked.length); k++) {
       const { i, score } = ranked[k];
       const ex = explain(board, player, i);
-      out.push({ i, coord: Othello.coordLabel(i), score, reason: ex.text, features: ex.features });
+      let text = ex.text;
+      if (k === 0 && losing) {
+        // Lead with honest position context, then the consequence (no double period).
+        text = 'You are behind on discs; this is the least-bad option, but ' +
+               text.replace(/\.\s*$/, '');
+      }
+      out.push({ i, coord: Othello.coordLabel(i), score, reason: text, features: ex.features });
     }
     return out;
   }
@@ -546,9 +557,11 @@ footer code { background: #2a2a44; padding: 0 .3rem; border-radius: 4px; }
   function explain(board, player, index) {
     const nxt = Othello.makeMove(board, player, index);
     const opp = Othello.other(player);
+    const oppLabel = opp === Othello.BLACK ? 'Black' : 'White';
     const parts = [];
     const features = [];
 
+    // --- your move's immediate effect ---
     const myBefore = Othello.legalMoves(board, player).length;
     const myAfter = Othello.legalMoves(nxt, player).length;
     const mobDelta = myAfter - myBefore;
@@ -575,20 +588,52 @@ footer code { background: #2a2a44; padding: 0 .3rem; border-radius: 4px; }
 
     const cntA = Othello.countDiscs(nxt);
     const cntB = Othello.countDiscs(board);
-    const gained = (player === BLACK ? cntA.black - cntB.black : cntA.white - cntB.white);
+    const gained = (player === Othello.BLACK ? cntA.black - cntB.black : cntA.white - cntB.white);
     if (gained > 0) features.push({ feature: 'flips', delta: gained });
 
-    // parity / pass pressure
-    const oppAfter = Othello.legalMoves(nxt, opp).length;
-    if (oppAfter === 0) {
-      parts.push('leaves your opponent with no move — you gain tempo');
+    // --- the opponent's (engine's) best reply and what it does to you ---
+    const oppMovesOnNxt = Othello.legalMoves(nxt, opp).length;
+    if (oppMovesOnNxt === 0) {
+      parts.push(`leaves ${oppLabel} with no move — you gain tempo`);
       features.push({ feature: 'parity', delta: 1 });
+    } else {
+      const reply = rankMoves(nxt, opp, 4)[0];          // engine's best answer, depth 4
+      if (reply) {
+        const summary = replySummary(nxt, opp, player, reply.i);
+        parts.push(summary);
+        features.push({ feature: 'opponentReply', coord: Othello.coordLabel(reply.i) });
+      }
     }
 
     let sentence = parts.length
       ? parts.join(', ')
       : 'balances disc count and maintains flexibility';
     return { text: sentence + '.', features };
+  }
+
+  /**
+   * Deterministically describe the opponent's best reply in terms of the threat it
+   * poses to @player (the coached side). Reads the reply's own feature deltas, so the
+   * warning is generated from the engine's evaluation — no LLM.
+   * e.g. "White plays h7 to capture the edge, flipping 2 of your discs".
+   */
+  function replySummary(nxt, opp, player, replyIdx) {
+    const r = (replyIdx / 8) | 0, c = replyIdx % 8;
+    const w = Eval.SQUARE_WEIGHTS[r][c];
+    const oppLabel = opp === Othello.BLACK ? 'Black' : 'White';
+    const coord = Othello.coordLabel(replyIdx);
+    const b2 = Othello.makeMove(nxt, opp, replyIdx);
+    const c1 = Othello.countDiscs(nxt), c2 = Othello.countDiscs(b2);
+    const flips = (opp === Othello.BLACK ? c2.black - c1.black : c2.white - c1.white);
+    const yourAfter = Othello.legalMoves(b2, player).length;
+
+    const clauses = [`${oppLabel} plays ${coord}`];
+    if (w > 50) clauses.push('to take a corner');
+    else if (w > 0 && (r === 0 || r === 7 || c === 0 || c === 7)) clauses.push('to capture the edge');
+    else if (w < -12) clauses.push('to sit in an X-square');
+    if (flips > 0) clauses.push(`flipping ${flips} of your disc${flips === 1 ? '' : 's'}`);
+    if (yourAfter === 0) clauses.push('leaving you no move — you must pass');
+    return clauses.join(', ');
   }
 
   const Search = { rankMoves, helpMe, negamax };
