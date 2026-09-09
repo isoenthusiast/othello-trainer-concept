@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Othello Trainer Concept</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Othello Trainer Concept</h1>
+    <p class="sub">Master-strength engine + a deterministic <strong>HELP ME</strong> coach. No AI model — the coach reads the engine's own evaluation.</p>
+  </header>
+
+  <!-- If you're the human, you play; the engine plays the other color. -->
+  <main>
+    <div class="board-wrap">
+      <div id="board" class="board"></div>
+    </div>
+
+    <aside class="panel">
+      <div class="status">
+        <div><h2>You play</h2><div class="chip" id="human-chip">Black</div></div>
+        <div><h2>Engine</h2><div class="chip" id="ai-chip">White</div></div>
+      </div>
+
+      <div class="score">
+        <div class="score-box"><span id="score-black">2</span><label>You</label></div>
+        <div class="score-box"><span id="score-white">2</span><label>Engine</label></div>
+      </div>
+
+      <div id="turn" class="turn">Your turn</div>
+
+      <div class="controls">
+        <button id="help-btn">💡 HELP ME</button>
+        <button id="hint-coord" class="secondary">Show hint coord</button>
+      </div>
+
+      <section id="coach" class="coach hidden">
+        <h3>Coach's picks (top 3)</h3>
+        <ul id="coach-list"></ul>
+      </section>
+
+      <div class="endgame hidden" id="endgame">
+        <h3 id="endgame-title">Game over</h3>
+        <p id="endgame-detail"></p>
+        <button id="restart">Play again</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <p>Concept build. The engine plays a strong sound game; the path to true master level (bitboards + WASM + data-fitted eval weights) is in <code>docs/ROADMAP.md</code>.</p>
+  </footer>
+
+  <script src="src/engine.js"></script>
+  <script src="src/eval.js"></script>
+  <script src="src/search.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
