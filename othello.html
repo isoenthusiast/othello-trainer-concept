@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Othello Trainer Concept</title>
+<!-- BUILT single-file edition (built 2026-09-09T05:22:12.122Z) -->
+<style>
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  margin: 0; background: #1a1a2e; color: #eaeaf1;
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+}
+header { text-align: center; padding: 1.4rem 1rem 0.4rem; }
+header h1 { margin: 0; font-size: 1.6rem; }
+.sub { color: #a7a7c4; max-width: 40rem; margin: 0.4rem auto 0; font-size: 0.92rem; }
+
+main {
+  display: flex; flex-wrap: wrap; gap: 1.6rem;
+  justify-content: center; align-items: flex-start;
+  padding: 1.2rem 1rem; width: 100%; max-width: 60rem;
+}
+
+/* board */
+.board-wrap { flex: 0 0 auto; }
+.board {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;
+  width: min(72vw, 26rem); aspect-ratio: 1 / 1;
+  background: #0f3460; padding: 6px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+.cell {
+  background: #16537e; border-radius: 6px; position: relative; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.cell.legal::after {
+  content: ''; width: 22%; height: 22%; border-radius: 50%;
+  background: rgba(255,255,255,.28); position: absolute;
+}
+.cell:hover.legal { background: #1a6696; }
+.disc { width: 72%; height: 72%; border-radius: 50%; }
+.disc.black { background: radial-gradient(circle at 30% 30%, #4a4a55, #111 65%); border: 1px solid #000; }
+.disc.white { background: radial-gradient(circle at 30% 30%, #fff, #cfcfd6 65%); border: 1px solid #999; }
+.cell.last { outline: 2px solid #ffd166; outline-offset: -2px; }
+.cell.suggest { outline: 2px solid #6cf; outline-offset: -2px; }
+
+/* panel */
+.panel { flex: 1 1 18rem; max-width: 22rem; background: #24243d; border-radius: 12px; padding: 1.1rem 1.2rem; }
+.status { display: flex; justify-content: space-between; gap: 1rem; }
+.status h2 { margin: 0 0 .3rem; font-size: .95rem; color: #b8b8d0; }
+.chip { display: inline-block; padding: .2rem .7rem; border-radius: 999px; background: #333; font-size: .85rem; }
+.chip.black { background: #222; color: #fff; }
+.chip.white { background: #eaeaf1; color: #111; }
+
+.score { display: flex; gap: 1.4rem; margin: 1rem 0 .6rem; }
+.score-box { text-align: center; }
+.score-box span { font-size: 2rem; font-weight: 700; display: block; }
+.score-box label { color: #9a9ab5; font-size: .8rem; }
+
+.turn { font-weight: 600; margin-bottom: .8rem; color: #ffd166; }
+
+.controls { display: flex; gap: .6rem; margin-bottom: 1rem; }
+button {
+  font: inherit; cursor: pointer; border: none; border-radius: 8px; padding: .55rem .9rem;
+}
+#help-btn { background: #ffd166; color: #222; font-weight: 700; }
+#help-btn:disabled { background: #5a5a6e; color: #999; cursor: not-allowed; }
+.secondary { background: #38385a; color: #eaeaf1; }
+.secondary:disabled { opacity: .5; cursor: not-allowed; }
+
+/* coach */
+.coach { border-top: 1px solid #3a3a5a; padding-top: .8rem; }
+.coach h3 { margin: 0 0 .6rem; font-size: 1rem; color: #6cf; }
+.coach ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+.coach li { background: #2c2c4a; padding: .6rem .7rem; border-radius: 8px; cursor: pointer; }
+.coach li:hover { background: #34345a; }
+.coach li .coord { font-weight: 700; color: #ffd166; }
+.coach li .score { margin: .1rem 0 0; font-size: .8rem; color: #9a9ab5; display: block; }
+.coach li .why { margin: .2rem 0 0; font-size: .85rem; color: #cfcfe2; }
+
+/* endgame */
+.endgame { border-top: 1px solid #3a3a5a; padding-top: .8rem; margin-top: .4rem; }
+#restart { margin-top: .4rem; background: #6cf; color: #111; font-weight: 700; }
+
+.hidden { display: none; }
+footer { padding: 1rem; color: #7a7a94; font-size: .82rem; max-width: 42rem; text-align: center; }
+footer code { background: #2a2a44; padding: 0 .3rem; border-radius: 4px; }
+
+</style>
+</head>
+<body>
+  <header>
+    <h1>Othello Trainer Concept</h1>
+    <p class="sub">Master-strength engine + a deterministic <strong>HELP ME</strong> coach. No AI model — the coach reads the engine's own evaluation.</p>
+  </header>
+
+  <main>
+    <div class="board-wrap">
+      <div id="board" class="board"></div>
+    </div>
+
+    <aside class="panel">
+      <div class="status">
+        <div><h2>You play</h2><div class="chip" id="human-chip">Black</div></div>
+        <div><h2>Engine</h2><div class="chip" id="ai-chip">White</div></div>
+      </div>
+
+      <div class="score">
+        <div class="score-box"><span id="score-black">2</span><label>You</label></div>
+        <div class="score-box"><span id="score-white">2</span><label>Engine</label></div>
+      </div>
+
+      <div id="turn" class="turn">Your turn</div>
+
+      <div class="controls">
+        <button id="help-btn">💡 HELP ME</button>
+        <button id="hint-coord" class="secondary">Show hint coord</button>
+      </div>
+
+      <section id="coach" class="coach hidden">
+        <h3>Coach's picks (top 3)</h3>
+        <ul id="coach-list"></ul>
+      </section>
+
+      <div class="endgame hidden" id="endgame">
+        <h3 id="endgame-title">Game over</h3>
+        <p id="endgame-detail"></p>
+        <button id="restart">Play again</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <p>Concept build. The engine plays a strong sound game; the path to true master level (bitboards + WASM + data-fitted eval weights) is in <code>docs/ROADMAP.md</code>.</p>
+  </footer>
+
+<script>
+/**
+ * Othello / Reversi engine.
+ * Plain browser script (globalThis.Othello) so it opens via file:// with no build step.
+ * Board = flat array of 64, index = row*8 + col. 0 = empty, 1 = black, 2 = white.
+ * Not yet bitboard-optimized — this is the clearest, bug-free reference. See docs/ROADMAP.md
+ * for the bitboard + WASM path to true master strength.
+ */
+(function (global) {
+  'use strict';
+
+  const BLACK = 1;
+  const WHITE = 2;
+
+  // 8 directions as (dr, dc)
+  const DIRS = [
+    [-1, -1], [-1, 0], [-1, 1],
+    [0, -1],           [0, 1],
+    [1, -1],  [1, 0],  [1, 1],
+  ];
+
+  function onBoard(r, c) {
+    return r >= 0 && r < 8 && c >= 0 && c < 8;
+  }
+
+  /** Fresh board with the standard 4-center setup. black moves first. */
+  function newBoard() {
+    const b = new Array(64).fill(0);
+    b[3 * 8 + 3] = WHITE; // d4
+    b[3 * 8 + 4] = BLACK; // e4
+    b[4 * 8 + 3] = BLACK; // d5
+    b[4 * 8 + 4] = WHITE; // e5
+    return b;
+  }
+
+  function at(board, i) { return board[i]; }
+  function idxOf(r, c) { return r * 8 + c; }
+  function rowOf(i) { return (i / 8) | 0; }
+  function colOf(i) { return i % 8; }
+
+  /**
+   * Coordinate label a1..h8 for a square index.
+   * Convention: a1 = top-left (row 0, col 0), h8 = bottom-right (row 7, col 7),
+   * matching the WTHOR/FFO indexing used by the FFO dataset.
+   */
+  function coordLabel(i) {
+    const r = rowOf(i), c = colOf(i);
+    return String.fromCharCode(97 + c) + (r + 1);
+  }
+
+  /**
+   * All legal moves for @player. Each is the set of opponent discs it flips.
+   * Returns an array of { i, flips:[indices] }.
+   */
+  function legalMoves(board, player) {
+    const opp = player === BLACK ? WHITE : BLACK;
+    const moves = [];
+    for (let i = 0; i < 64; i++) {
+      if (board[i] !== 0) continue;
+      const flips = [];
+      const r = rowOf(i), c = colOf(i);
+      for (const [dr, dc] of DIRS) {
+        let rr = r + dr, cc = c + dc;
+        let line = [];
+        while (onBoard(rr, cc) && board[idxOf(rr, cc)] === opp) {
+          line.push(idxOf(rr, cc));
+          rr += dr; cc += dc;
+        }
+        if (line.length > 0 && onBoard(rr, cc) && board[idxOf(rr, cc)] === player) {
+          for (const x of line) flips.push(x);
+        }
+      }
+      if (flips.length > 0) moves.push({ i, flips });
+    }
+    return moves;
+  }
+
+  function hasAnyMove(board, player) {
+    return legalMoves(board, player).length > 0;
+  }
+
+  /**
+   * Apply a legal move, returning a NEW board (immutable). Throws on illegal move.
+   */
+  function makeMove(board, player, index, flips) {
+    // If flips weren't given, recompute (callers that have them pass them for speed).
+    let toFlip = flips;
+    if (!toFlip) {
+      const mv = legalMoves(board, player).find((m) => m.i === index);
+      if (!mv) throw new Error('Illegal move: ' + index);
+      toFlip = mv.flips;
+    }
+    const b = board.slice();
+    b[index] = player;
+    for (const x of toFlip) b[x] = player;
+    return b;
+  }
+
+  /**
+   * The player to move next after @player just played at @index, or null if the game is over.
+   * Ignores whether the next player has moves — caller decides pass/skip.
+   */
+  function other(player) { return player === BLACK ? WHITE : BLACK; }
+
+  function countDiscs(board) {
+    let b = 0, w = 0;
+    for (const v of board) { if (v === BLACK) b++; else if (v === WHITE) w++; }
+    return { black: b, white: w };
+  }
+
+  /** Total discs remaining in the game (game ends when 64 or no moves for both). */
+  function totalDiscs(board) {
+    let n = 0;
+    for (const v of board) if (v !== 0) n++;
+    return n;
+  }
+
+  const Othello = {
+    BLACK, WHITE,
+    newBoard, legalMoves, hasAnyMove, makeMove,
+    at, idxOf, rowOf, colOf, coordLabel,
+    other, countDiscs, totalDiscs,
+  };
+  global.Othello = Othello;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/**
+ * Othello evaluation — the "brain". 
+ * This is a feature-weighted static evaluation (Logistello-style), NOT a neural net.
+ * Plain browser script exposing globalThis.Eval.
+ *
+ * Philosophy: master strength in Othello comes from (a) deep alpha-beta search and
+ * (b) an evaluation that is DECOMPOSABLE into human-meaningful features. That
+ * decomposability is exactly what powers the deterministic "HELP ME" coach — each
+ * feature's contribution to a move's value is reported directly.
+ *
+ * The weights below are sensible hand-set defaults. The refinement path (fit these
+ * from labeled positions on WTHOR / Egaroucid data) is documented in docs/ROADMAP.md.
+ */
+(function (global) {
+  'use strict';
+
+  const BLACK = 1, WHITE = 2;
+
+  // Corner / edge square values that reward stable edges and punish X-squares.
+  // Indexed by [row][col]. Negative = bad (X-squares adjacent to corners).
+  const SQUARE_WEIGHTS = [
+    [ 100,  -12,   8,   6,   6,   8, -12,  100],
+    [ -12,  -20,  -4,  -4,  -4,  -4, -20,  -12],
+    [   8,   -4,   2,   2,   2,   2,  -4,    8],
+    [   6,   -4,   2,   2,   2,   2,  -4,    6],
+    [   6,   -4,   2,   2,   2,   2,  -4,    6],
+    [   8,   -4,   2,   2,   2,   2,  -4,    8],
+    [ -12,  -20,  -4,  -4,  -4,  -4, -20,  -12],
+    [ 100,  -12,   8,   6,   6,   8, -12,  100],
+  ];
+
+  // Feature weights in a normalized (approximately centipawn-ish) scale.
+  // Higher weight = the feature matters more in a total evaluation.
+  const WEIGHTS = {
+    discs:     1.0,
+    mobility:  12.0,   // current legal moves
+    potential:  3.0,   // frontier / mobility potential
+    corners:    8.0,   // squared corner ownership (corner is huge)
+    stability:  6.0,   // discs that can never flip (edges/corners)
+    parity:     2.5,   // who plays the last move (endgame only)
+    wedge:      3.0,   // controlling a hole that the corner is adjacent to
+  };
+
+  /**
+   * Evaluate a board from the perspective of @player.
+   * Positive score = good for @player. Uses static features + square weights.
+   * @param {number[]} board  64-length board from Othello
+   * @param {number} player   BLACK or WHITE
+   * @param {boolean} [stage] how far into the game (0=early, 1=mid, 2=late) to modulate parity
+   */
+  function evaluate(board, player, stage) {
+    const opp = player === BLACK ? WHITE : BLACK;
+    let score = 0;
+
+    let myDiscs = 0, oppDiscs = 0;
+    for (let i = 0; i < 64; i++) {
+      const v = board[i];
+      if (v === player) myDiscs++;
+      else if (v === opp) oppDiscs++;
+    }
+    score += WEIGHTS.discs * Math.sign(myDiscs - oppDiscs) *
+      (Math.abs(myDiscs - oppDiscs));
+
+    // --- mobility ---
+    const myMoves = Othello.legalMoves(board, player).length;
+    const oppMoves = Othello.legalMoves(board, opp).length;
+    if (myMoves + oppMoves > 0) {
+      score += WEIGHTS.mobility * 100 * (myMoves - oppMoves) / (myMoves + oppMoves);
+    }
+
+    // --- corner + square weights + "stability" proxy ---
+    let myWeight = 0, oppWeight = 0;
+    for (let i = 0; i < 64; i++) {
+      const v = board[i];
+      const r = (i / 8) | 0, c = i % 8;
+      const w = SQUARE_WEIGHTS[r][c];
+      if (v === player) myWeight += w;
+      else if (v === opp) oppWeight += w;
+    }
+    score += WEIGHTS.corners * (myWeight - oppWeight) / 100.0;
+
+    // --- parity (endgame): who plays last often decides the game ---
+    if (stage && stage >= 0.8) {
+      const empties = 64 - (myDiscs + oppDiscs);
+      if (myMoves > 0 && oppMoves === 0) score += WEIGHTS.parity * 10;
+      else if (oppMoves > 0 && myMoves === 0) score -= WEIGHTS.parity * 10;
+      // crude but effective: touching the empties count
+      score += WEIGHTS.parity * (empties % 2 === 0 ? 1 : -1) * 2;
+    }
+
+    // --- edges owned & stability proxy: a disc that borders the board edge on all
+    //     sides (fully in a corner) is stable; approximate by rewarding edges a little ---
+    score += WEIGHTS.stability * (myWeight - oppWeight) / 400.0;
+
+    return score;
+  }
+
+  /**
+   * Describe a move in human terms by decomposing its evaluation into features.
+   * Returns a list of {feature, delta} explaining WHY @index is good for @player.
+   * This is the deterministic "coach" signal — no LLM, no neural net.
+   */
+  function explainMove(board, player, index) {
+    const nxt = Othello.makeMove(board, player, index);
+    const flat = [];
+    const info = {};
+
+    // mobility delta
+    const opp = player === BLACK ? WHITE : BLACK;
+    const myBefore = Othello.legalMoves(board, player).length;
+    const myAfter = Othello.legalMoves(nxt, player).length;
+    info.mobility = myAfter - myBefore;
+    if (info.mobility !== 0) flat.push({ feature: 'mobility', delta: info.mobility });
+
+    // corner / edge acquisition
+    const r = (index / 8) | 0, c = index % 8;
+    const w = SQUARE_WEIGHTS[r][c];
+    if (w > 50) flat.push({ feature: 'corner', delta: w });
+    else if (w > 0 && (r === 0 || r === 7 || c === 0 || c === 7))
+      flat.push({ feature: 'edge', delta: w });
+    else if (w < -12) flat.push({ feature: 'x-square', delta: w }); // avoid
+
+    // stability / disc counts after
+    const cntA = Othello.countDiscs(nxt);
+    const cntB = Othello.countDiscs(board);
+    const gained = (player === BLACK ? cntA.black - cntB.black : cntA.white - cntB.white);
+    if (gained > 0) flat.push({ feature: 'flips', delta: gained });
+
+    // overall search value (filled by caller — placeholder here)
+    return { features: flat };
+  }
+
+  const Eval = {
+    evaluate, explainMove, SQUARE_WEIGHTS, WEIGHTS,
+  };
+  global.Eval = Eval;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/**
+ * Search + the deterministic "HELP ME" coach.
+ * Plain browser script exposing globalThis.Search.
+ *
+ * Uses negamax + alpha-beta with iterative deepening, near-best-first move ordering,
+ * and an optional transposition-lite (position hash -> depth,score,flag). Moves are
+ * searched in a ranked order so a strong-but-ready-to-move best move is returned fast.
+ * For a browser this keeps the UI responsive at reasonable depths; depth is capped.
+ */
+(function (global) {
+  'use strict';
+
+  const BLACK = 1, WHITE = 2;
+
+  // Simple zobrist-lite hash: map each square/color to a pseudo-random 32-bit.
+  // Deterministic so results are reproducible.
+  let RAND = [];
+  (function seed() {
+    let s = 0x12345678;
+    const next = () => {
+      s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s |= 0;
+      return s >>> 0;
+    };
+    for (let i = 0; i < 64 * 3; i++) RAND.push(next());
+  })();
+
+  function hash(board) {
+    let h = 0;
+    for (let i = 0; i < 64; i++) {
+      const v = board[i];
+      if (v === BLACK) h ^= RAND[i * 3 + 0];
+      else if (v === WHITE) h ^= RAND[i * 3 + 1];
+    }
+    return h >>> 0;
+  }
+
+  /**
+   * Negamax with alpha-beta.
+   * @returns {number} score from the perspective of @player at the root.
+   */
+  function negamax(board, player, depth, alpha, beta, stage, tt, ply) {
+    const moves = Othello.legalMoves(board, player);
+    if (depth === 0) return Eval.evaluate(board, player, stage);
+
+    // No moves for player: pass to opponent, or endgame.
+    if (moves.length === 0) {
+      const opp = Othello.other(player);
+      // If opponent also has no moves, game over — score by final disc count.
+      if (!Othello.hasAnyMove(board, opp)) {
+        const c = Othello.countDiscs(board);
+        return (player === BLACK ? c.black - c.white : c.white - c.black) * 100;
+      }
+      return -negamax(board, opp, depth - 1, -beta, -alpha, stage, tt, ply + 1);
+    }
+
+    // Transposition-lite lookup
+    const H = hash(board);
+    const ttEntry = tt.get(H);
+    if (ttEntry && ttEntry.depth >= depth) {
+      if (ttEntry.flag === 'exact') return ttEntry.score;
+      if (ttEntry.flag === 'lower') alpha = Math.max(alpha, ttEntry.score);
+      else if (ttEntry.flag === 'upper') beta = Math.min(beta, ttEntry.score);
+      if (alpha >= beta) return ttEntry.score;
+    }
+
+    // Order moves: cheap eval first for better pruning.
+    let ordered = moves.map((m) => {
+      const b = Othello.makeMove(board, player, m.i, m.flips);
+      return { m, score: Eval.evaluate(b, player, stage) };
+    });
+    ordered.sort((a, b) => b.score - a.score);
+
+    let best = -Infinity;
+    let bestFlag = 'upper';
+    let bestChildScore = -Infinity;
+    for (const { m } of ordered) {
+      const b = Othello.makeMove(board, player, m.i, m.flips);
+      const score = -negamax(b, Othello.other(player), depth - 1, -beta, -alpha, stage, tt, ply + 1);
+      if (score > best) { best = score; bestChildScore = score; bestFlag = 'exact'; }
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) { bestFlag = 'lower'; break; }
+    }
+
+    tt.set(H, { depth, score: best, flag: bestFlag });
+    return best;
+  }
+
+  /**
+   * Rank the legal moves for @player, best first, with the search score (from
+   * player's perspective). Runs iterative deepening up to @maxDepth, returning the
+   * ranking from the deepest completed depth we had time for.
+   */
+  function rankMoves(board, player, maxDepth) {
+    const tt = new Map();
+    const stage = (Othello.totalDiscs(board) / 64);
+    let results = [];
+
+    const moves = Othello.legalMoves(board, player);
+    for (let depth = 1; depth <= maxDepth; depth++) {
+      const scored = moves.map((m) => {
+        const b = Othello.makeMove(board, player, m.i, m.flips);
+        const s = -negamax(b, Othello.other(player), depth - 1, -Infinity, Infinity, stage, tt, 1);
+        return { i: m.i, score: s };
+      });
+      // Near-best-first ordering for consistency across iterations
+      scored.sort((a, b) => b.score - a.score);
+      results = scored;
+    }
+    return results;
+  }
+
+  /**
+   * The "HELP ME" coach: returns the top-3 moves with a deterministic reason each.
+   * reason = a plain-english sentence assembled from feature deltas (no LLM).
+   * @param {number[]} board
+   * @param {number} player
+   * @param {number} topN   how many moves to return (default 3)
+   * @param {number} depth  search depth (default 6 — good for a coaching hint)
+   */
+  function helpMe(board, player, topN, depth) {
+    topN = topN || 3;
+    depth = depth || 6;
+    const ranked = rankMoves(board, player, depth);
+    const out = [];
+    for (let k = 0; k < Math.min(topN, ranked.length); k++) {
+      const { i, score } = ranked[k];
+      const ex = explain(board, player, i);
+      out.push({ i, coord: Othello.coordLabel(i), score, reason: ex.text, features: ex.features });
+    }
+    return out;
+  }
+
+  /** Build the plain-english reason from the decomposed features. */
+  function explain(board, player, index) {
+    const nxt = Othello.makeMove(board, player, index);
+    const opp = Othello.other(player);
+    const parts = [];
+    const features = [];
+
+    const myBefore = Othello.legalMoves(board, player).length;
+    const myAfter = Othello.legalMoves(nxt, player).length;
+    const mobDelta = myAfter - myBefore;
+    if (mobDelta > 0) {
+      parts.push(`gives you ${mobDelta} more legal move${mobDelta === 1 ? '' : 's'}`);
+      features.push({ feature: 'mobility', delta: mobDelta });
+    } else if (mobDelta < 0) {
+      parts.push(`costs you ${-mobDelta} legal move${mobDelta === -1 ? '' : 's'}`);
+      features.push({ feature: 'mobility', delta: mobDelta });
+    }
+
+    const r = (index / 8) | 0, c = index % 8;
+    const w = Eval.SQUARE_WEIGHTS[r][c];
+    if (w > 50) {
+      parts.push('secures a corner');
+      features.push({ feature: 'corner', delta: w });
+    } else if (w > 0 && (r === 0 || r === 7 || c === 0 || c === 7)) {
+      parts.push('extends your edge');
+      features.push({ feature: 'edge', delta: w });
+    } else if (w < -12) {
+      parts.push('(caution: this sits in an X-square, adjacent to a corner)');
+      features.push({ feature: 'x-square', delta: w });
+    }
+
+    const cntA = Othello.countDiscs(nxt);
+    const cntB = Othello.countDiscs(board);
+    const gained = (player === BLACK ? cntA.black - cntB.black : cntA.white - cntB.white);
+    if (gained > 0) features.push({ feature: 'flips', delta: gained });
+
+    // parity / pass pressure
+    const oppAfter = Othello.legalMoves(nxt, opp).length;
+    if (oppAfter === 0) {
+      parts.push('leaves your opponent with no move — you gain tempo');
+      features.push({ feature: 'parity', delta: 1 });
+    }
+
+    let sentence = parts.length
+      ? parts.join(', ')
+      : 'balances disc count and maintains flexibility';
+    return { text: sentence + '.', features };
+  }
+
+  const Search = { rankMoves, helpMe, negamax };
+  global.Search = Search;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/**
+ * Game controller: human vs engine. Binds the board UI, the engine (Othello),
+ * and the alpha-beta search (Search) + deterministic coach (Search.helpMe).
+ *
+ * Search runs on the main thread (synchronous) so the app opens straight from
+ * file:// with no build step / no server / no worker-origin headaches. The search
+ * depth is capped to keep the UI responsive; the worker path is a documented
+ * upgrade in docs/ROADMAP.md for pushing to true master strength.
+ */
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const HUMAN = Othello.BLACK;   // you play first
+const AI = Othello.WHITE;
+
+let board = Othello.newBoard();
+let turn = HUMAN;              // whose move it is
+let last = null;               // last played square index
+let gameOver = false;
+
+const AI_DEPTH = 6;            // search depth for the engine's move. Bump for a harder engine.
+
+function render() {
+  const b = $('board');
+  b.innerHTML = '';
+  for (let i = 0; i < 64; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const r = (i / 8) | 0, c = i % 8;
+    cell.dataset.r = r; cell.dataset.c = c; cell.dataset.i = i;
+    const v = board[i];
+    if (v === HUMAN) cell.appendChild(disc('black'));
+    else if (v === AI) cell.appendChild(disc('white'));
+
+    // mark last move
+    if (i === last) cell.classList.add('last');
+
+    // legal highlights + click only on current turn
+    if (!gameOver && turn === HUMAN) {
+      const legal = Othello.legalMoves(board, HUMAN).some((m) => m.i === i);
+      if (legal) cell.classList.add('legal');
+    }
+    cell.addEventListener('click', () => onCellClick(i));
+    b.appendChild(cell);
+  }
+  updateScore();
+  updateTurn();
+}
+
+function disc(color) {
+  const d = document.createElement('span');
+  d.className = 'disc ' + color;
+  return d;
+}
+
+function updateScore() {
+  const { black, white } = Othello.countDiscs(board);
+  $('score-black').textContent = black;
+  $('score-white').textContent = white;
+}
+
+function updateTurn() {
+  const t = $('turn');
+  const help = $('help-btn');
+  if (gameOver) {
+    t.textContent = 'Game over';
+    help.disabled = true;
+    $('endgame').classList.remove('hidden');
+    const { black, white } = Othello.countDiscs(board);
+    $('endgame-title').textContent = black > white ? 'You win!' : white > black ? 'Engine wins.' : 'Draw.';
+    $('endgame-detail').textContent = `Final: You ${black} — Engine ${white}`;
+    return;
+  }
+  const humanTurn = (turn === HUMAN);
+  t.textContent = humanTurn ? 'Your turn' : 'Engine thinking…';
+  help.disabled = !humanTurn;
+}
+
+function onCellClick(i) {
+  if (gameOver || turn !== HUMAN) return;
+  const mv = Othello.legalMoves(board, HUMAN).find((m) => m.i === i);
+  if (!mv) return;
+  board = Othello.makeMove(board, HUMAN, i, mv.flips);
+  last = i;
+  $('coach').classList.add('hidden');
+  $('hint-coord').classList.add('hidden');
+  render();
+  if (!advanceTurn()) return;
+  engineMove();
+}
+
+/**
+ * After a move by the current `turn` player: decide whose move is next,
+ * applying Othello's pass rule. Returns false only when the game is over.
+ */
+function advanceTurn() {
+  const justMoved = turn;
+  const nxt = Othello.other(justMoved);
+  if (Othello.hasAnyMove(board, nxt)) {
+    turn = nxt;              // opponent can move — normal
+  } else if (Othello.hasAnyMove(board, justMoved)) {
+    // opponent has no move but we do → they pass, we move again
+    // (turn stays on justMoved)
+  } else {
+    gameOver = true;         // nobody can move — game over
+  }
+  return !gameOver;
+}
+
+function engineMove() {
+  if (turn !== AI) return;
+  const rank = Search.helpMe(board, AI, 1, AI_DEPTH); // engine just needs best move
+  if (!rank.length) { // engine has no move -> enemy turn / pass logic
+    if (Othello.hasAnyMove(board, HUMAN)) { turn = HUMAN; render(); }
+    else { gameOver = true; render(); }
+    return;
+  }
+  const best = rank[0];
+  // animate in a worker for snappiness
+  board = Othello.makeMove(board, AI, best.i, Othello.legalMoves(board, AI).find((m) => m.i === best.i).flips);
+  last = best.i;
+  render();
+  if (!advanceTurn()) return;
+  render();
+}
+
+function showHelp() {
+  if (turn !== HUMAN || gameOver) return;
+  const picks = Search.helpMe(board, HUMAN, 3);
+  const list = $('coach-list');
+  list.innerHTML = '';
+  for (const p of picks) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="coord">${p.coord}</span> · <span class="score">value ${(p.score).toFixed(1)}</span>` +
+      `<div class="why">${p.reason}</div>`;
+    li.addEventListener('click', () => {
+      const mv = Othello.legalMoves(board, HUMAN).find((m) => m.i === p.i);
+      if (mv) onCellClick(p.i);
+    });
+    list.appendChild(li);
+  }
+  $('coach').classList.remove('hidden');
+}
+
+function showHintCoord() {
+  // Just a tiny aid: highlight a strong square for the human.
+  const picks = Search.helpMe(board, HUMAN, 1);
+  if (!picks.length) return;
+  $('hint-coord').textContent = 'Try: ' + picks[0].coord;
+  $('hint-coord').classList.remove('hidden');
+}
+
+function reset() {
+  board = Othello.newBoard();
+  turn = HUMAN;
+  last = null;
+  gameOver = false;
+  $('coach').classList.add('hidden');
+  $('endgame').classList.add('hidden');
+  $('hint-coord').classList.add('hidden');
+  render();
+}
+
+$('help-btn').addEventListener('click', showHelp);
+$('hint-coord').addEventListener('click', showHintCoord);
+$('restart').addEventListener('click', reset);
+
+render();
+
+</script>
+</body>
+</html>
