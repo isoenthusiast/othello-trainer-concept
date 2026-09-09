@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Othello Trainer Concept</title>
-<!-- BUILT single-file edition (built 2026-09-09T05:27:09.143Z) -->
+<!-- BUILT single-file edition (built 2026-09-09T05:33:59.590Z) -->
 <style>
 * { box-sizing: border-box; }
 body {
@@ -697,43 +697,62 @@ function onCellClick(i) {
   $('coach').classList.add('hidden');
   $('hint-coord').classList.add('hidden');
   render();
-  if (!advanceTurn()) return;
-  engineMove();
+  drive();
 }
 
 /**
- * After a move by the current `turn` player: decide whose move is next,
- * applying Othello's pass rule. Returns false only when the game is over.
+ * Drive the game forward after the player (needsToMove) just moved, applying the
+ * Othello pass rule correctly. In Othello, when a player has no legal move they PASS
+ * and the other player moves again — and that "other player" can itself have no move
+ * and pass again, chaining until someone can legally move or nobody can:
+ *
+ *   - If the next player (opponent) can move -> their turn.
+ *   - If the next player cannot move but the mover can -> mover keeps the turn (opponent passed).
+ *   - If neither can move -> game over.
+ *
+ * The engine is played in a loop so a chain of passes never strands the UI on
+ * "Engine thinking…": it keeps making engine moves until it is the human's turn
+ * (with a legal move available) or the game is actually over.
  */
-function advanceTurn() {
-  const justMoved = turn;
-  const nxt = Othello.other(justMoved);
-  if (Othello.hasAnyMove(board, nxt)) {
-    turn = nxt;              // opponent can move — normal
-  } else if (Othello.hasAnyMove(board, justMoved)) {
-    // opponent has no move but we do → they pass, we move again
-    // (turn stays on justMoved)
-  } else {
-    gameOver = true;         // nobody can move — game over
-  }
-  return !gameOver;
-}
+function drive() {
+  let guard = 0;
+  while (!gameOver && guard++ < 128) {
+    const mover = turn;
+    const opp = Othello.other(mover);
+    if (Othello.hasAnyMove(board, opp)) {
+      turn = opp;                       // opponent can move — normal hand-off
+    } else if (Othello.hasAnyMove(board, mover)) {
+      // opponent has no move but mover does -> opponent passes, mover moves again
+      turn = mover;
+    } else {
+      gameOver = true;                  // nobody can move — game over
+      break;
+    }
 
-function engineMove() {
-  if (turn !== AI) return;
-  const rank = Search.helpMe(board, AI, 1, AI_DEPTH); // engine just needs best move
-  if (!rank.length) { // engine has no move -> enemy turn / pass logic
-    if (Othello.hasAnyMove(board, HUMAN)) { turn = HUMAN; render(); }
-    else { gameOver = true; render(); }
-    return;
+    render();
+
+    if (turn === HUMAN) {
+      // Give the human the turn, but only if they can actually move. If the human
+      // cannot move, they pass and the engine keeps going (loop continues).
+      if (Othello.hasAnyMove(board, HUMAN)) return;
+      continue;
+    }
+
+    // Engine's turn: play the best move now.
+    const rank = Search.helpMe(board, AI, 1, AI_DEPTH);
+    if (!rank.length) {
+      // Engine has no move but it's its turn — can only happen if we mis-assigned.
+      // Fall back: if human can move, hand to human; else end.
+      if (Othello.hasAnyMove(board, HUMAN)) { turn = HUMAN; render(); return; }
+      gameOver = true; render(); return;
+    }
+    const best = rank[0];
+    const mv = Othello.legalMoves(board, AI).find((m) => m.i === best.i);
+    board = Othello.makeMove(board, AI, best.i, mv.flips);
+    last = best.i;
+    render();
   }
-  const best = rank[0];
-  // animate in a worker for snappiness
-  board = Othello.makeMove(board, AI, best.i, Othello.legalMoves(board, AI).find((m) => m.i === best.i).flips);
-  last = best.i;
-  render();
-  if (!advanceTurn()) return;
-  render();
+  if (gameOver) render();
 }
 
 function showHelp() {
