@@ -23,25 +23,38 @@ const AI_DEPTH = 6;            // search depth for the engine's move. Bump for a
 function render() {
   const b = $('board');
   b.innerHTML = '';
-  for (let i = 0; i < 64; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'cell';
-    const r = (i / 8) | 0, c = i % 8;
-    cell.dataset.r = r; cell.dataset.c = c; cell.dataset.i = i;
-    const v = board[i];
-    if (v === HUMAN) cell.appendChild(disc('black'));
-    else if (v === AI) cell.appendChild(disc('white'));
+  // Build a 9x9 grid: a rank/file label gutter around the 8x8 playfield.
+  // Row 0 = file letters a..h across the top; Col 0 = ranks 1..8 down the left.
+  // Board cell (r,c) sits at grid (r+1, c+1) and maps to engine index r*8+c,
+  // matching Othello.coordLabel (a1 = top-left, row 0 = rank 1, col 0 = file a).
+  for (let r = 0; r <= 8; r++) {
+    for (let c = 0; c <= 8; c++) {
+      const slot = document.createElement('div');
+      if (r === 0 && c === 0) {
+        slot.className = 'coord corner';
+      } else if (r === 0) {
+        slot.className = 'coord file';
+        slot.textContent = String.fromCharCode(97 + (c - 1)); // a..h
+      } else if (c === 0) {
+        slot.className = 'coord rank';
+        slot.textContent = String(r);                          // 1..8
+      } else {
+        const i = (r - 1) * 8 + (c - 1);
+        slot.className = 'cell';
+        slot.dataset.r = r - 1; slot.dataset.c = c - 1; slot.dataset.i = i;
+        const v = board[i];
+        if (v === HUMAN) slot.appendChild(disc('black'));
+        else if (v === AI) slot.appendChild(disc('white'));
 
-    // mark last move
-    if (i === last) cell.classList.add('last');
-
-    // legal highlights + click only on current turn
-    if (!gameOver && turn === HUMAN) {
-      const legal = Othello.legalMoves(board, HUMAN).some((m) => m.i === i);
-      if (legal) cell.classList.add('legal');
+        if (i === last) slot.classList.add('last');
+        if (!gameOver && turn === HUMAN) {
+          const legal = Othello.legalMoves(board, HUMAN).some((m) => m.i === i);
+          if (legal) slot.classList.add('legal');
+        }
+        slot.addEventListener('click', () => onCellClick(i));
+      }
+      b.appendChild(slot);
     }
-    cell.addEventListener('click', () => onCellClick(i));
-    b.appendChild(cell);
   }
   updateScore();
   updateTurn();
@@ -133,6 +146,8 @@ function showHelp() {
     const li = document.createElement('li');
     li.innerHTML = `<span class="coord">${p.coord}</span> · <span class="score">value ${(p.score).toFixed(1)}</span>` +
       `<div class="why">${p.reason}</div>`;
+    li.addEventListener('mouseenter', () => setSuggest(p.i));
+    li.addEventListener('mouseleave', () => clearSuggest());
     li.addEventListener('click', () => {
       const mv = Othello.legalMoves(board, HUMAN).find((m) => m.i === p.i);
       if (mv) onCellClick(p.i);
@@ -140,6 +155,14 @@ function showHelp() {
     list.appendChild(li);
   }
   $('coach').classList.remove('hidden');
+}
+
+function setSuggest(i) {
+  const el = document.querySelector(`.cell[data-i="${i}"]`);
+  if (el) el.classList.add('suggest');
+}
+function clearSuggest() {
+  document.querySelectorAll('.cell.suggest').forEach((el) => el.classList.remove('suggest'));
 }
 
 function showHintCoord() {

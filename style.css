@@ -14,13 +14,21 @@ main {
   padding: 1.2rem 1rem; width: 100%; max-width: 60rem;
 }
 
-/* board */
+/* board — 9x9 grid: a coordinate gutter (files a-h top, ranks 1-8 left) around the 8x8 playfield */
 .board-wrap { flex: 0 0 auto; }
 .board {
-  display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;
-  width: min(72vw, 26rem); aspect-ratio: 1 / 1;
+  display: grid; grid-template-columns: 1.4rem repeat(8, 1fr); grid-template-rows: 1.4rem repeat(8, 1fr);
+  gap: 3px;
+  width: min(76vw, 29rem); aspect-ratio: 1 / 1;
   background: #0f3460; padding: 6px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
 }
+.coord {
+  color: #7fa6c8; font-size: .62rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none; letter-spacing: .02em;
+}
+.coord.file { align-self: end; }
+.coord.rank { justify-self: end; }
 .cell {
   background: #16537e; border-radius: 6px; position: relative; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
