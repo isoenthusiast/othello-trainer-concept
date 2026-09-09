@@ -12,6 +12,7 @@ const css = read('style.css');
 const engine = read('src/engine.js');
 const evaljs = read('src/eval.js');
 const search = read('src/search.js');
+const patterns = read('src/patterns.js');
 const main = read('main.js');
 
 // Helper to embed JS safely inside <script> (escape closing tags so a stray "</script>"
@@ -83,6 +84,9 @@ ${embedJs(evaljs)}
 </script>
 <script>
 ${embedJs(search)}
+</script>
+<script>
+${embedJs(patterns)}
 </script>
 <script>
 ${embedJs(main)}

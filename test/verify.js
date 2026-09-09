@@ -19,11 +19,12 @@ function load(rel) {
   vm.runInContext(code, ctx, { filename: p });
 }
 
-['src/engine.js', 'src/eval.js', 'src/search.js'].forEach(load);
+['src/engine.js', 'src/eval.js', 'src/search.js', 'src/patterns.js'].forEach(load);
 
 const Othello = ctx.Othello;
 const Search = ctx.Search;
 const Eval = ctx.Eval;
+const Patterns = ctx.Patterns;
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
@@ -146,6 +147,83 @@ check('self-play ends with game-over condition (neither side can move, or full b
   `total=${total}, black can move?=${Othello.hasAnyMove(gb, Othello.BLACK)}, white can move?=${Othello.hasAnyMove(gb, Othello.WHITE)}`);
 check('self-play made legal moves (>=30)', movesMade >= 30, `movesMade=${movesMade}`);
 console.log(`  final: black=${finalCnt.black} white=${finalCnt.white} moves=${movesMade} iters=${safety}`);
+
+console.log(`\n=== pattern & opening library (D: coach insights + academic refs) ===`);
+
+// 10. Corner pattern fires on the corner-capture position.
+{
+  const ins = Patterns.forMove(bCorner, Othello.BLACK, index('a1'), {});
+  check('corner capture fires the Corner insight', ins.length === 1 && ins[0].name === 'Corner capture', ins.map((x) => x.name).join(','));
+  check('Corner insight carries academic refs with http urls',
+    ins.length === 1 && ins[0].refs.length >= 1 && ins[0].refs.every((r) => /^https?:\/\//.test(r.url)));
+}
+
+// 11. Wedge: c1 flanked by white b1/d1 along the top edge; corner a1 verified forced.
+{
+  const bw = boardFrom([
+    '.W.W....',
+    '..W.....',
+    '..B.....',
+    '........', '........', '........', '........', '........',
+  ]);
+  const ins = Patterns.forMove(bw, Othello.BLACK, index('c1'), {});
+  const w = ins.find((x) => x.name === 'Wedge');
+  check('wedge detection fires for c1 flanked by white on the edge', !!w, ins.map((x) => x.name).join(','));
+  if (w) check('wedge claims the a1 corner falls to you (search-verified)', /a1/.test(w.text), w.text);
+  if (w) check('wedge carries the Lazard guide ref', w.refs.some((r) => /lazard/i.test(r.label)));
+}
+
+// 12. Quiet move: c4 flips a surrounded white disc and creates no new frontier.
+{
+  const bq = boardFrom([
+    '........',
+    '........',
+    '.BBBB...',
+    '.B.WB...',
+    '.BBBB...',
+    '........', '........', '........',
+  ]);
+  const ins = Patterns.forMove(bq, Othello.BLACK, index('c4'), {});
+  const q = ins.find((x) => x.name === 'Quiet move');
+  check('quiet-move detection fires for the interior c4 move', !!q, ins.map((x) => x.name).join(','));
+  check('quiet helper isQuiet agrees', Patterns._test.isQuiet(bq, Othello.BLACK, index('c4')) === true);
+}
+
+// 13. Opening book: c4 e3 then candidate f6 continues the Tiger.
+{
+  const ins = Patterns.forMove(start, Othello.BLACK, index('f6'),
+    { history: [{ i: index('c4') }, { i: index('e3') }] });
+  const o = ins.find((x) => x.name === 'Opening book');
+  check('opening book fires on the Tiger continuation', !!o && /Tiger/.test(o.text), ins.map((x) => x.name).join(','));
+  if (o) check('opening insight cites the Gatliff openings list', o.refs.some((r) => /samsoft/.test(r.url)));
+}
+
+// 14. Region segmentation: a filled middle column splits the board into two regions.
+{
+  const rows = [];
+  for (let r = 0; r < 8; r++) rows.push('...B....');
+  const bs = boardFrom(rows);
+  const regs = Patterns._test.emptyRegions(bs);
+  check('filled middle column yields exactly 2 empty regions', regs.length === 2, `regions=${JSON.stringify(regs)}`);
+  check('region sizes sum to 56 empties', regs.reduce((a, b) => a + b, 0) === 56);
+}
+
+// 15. canTakeCornerWithin: direct corner capture is trivially forced.
+check('canTakeCornerWithin true when the corner is immediately legal',
+  Patterns._test.canTakeCornerWithin(bCorner, Othello.BLACK, 0, 1) === true);
+
+// 16. Feature fallback refs + combined refs for a coach pick.
+{
+  const picks = Search.helpMe(start, Othello.BLACK, 1, 4);
+  const fr = Patterns.refsForFeatures(picks[0].features);
+  check('feature fallback yields at least one citation', fr.length >= 1, JSON.stringify(picks[0].features));
+  const combined = Patterns.refsForPick(picks[0], []);
+  check('refsForPick caps at 3 and all urls are http(s)',
+    combined.length >= 1 && combined.length <= 3 && combined.every((r) => /^https?:\/\//.test(r.url)));
+  const insOnStart = Patterns.forMove(start, Othello.BLACK, picks[0].i, {});
+  check('forMove never returns more than 2 insights', insOnStart.length <= 2);
+  check('every insight has name+text+refs', insOnStart.every((x) => x.name && x.text && Array.isArray(x.refs)));
+}
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

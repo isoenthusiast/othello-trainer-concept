@@ -17,6 +17,7 @@ let board = Othello.newBoard();
 let turn = HUMAN;              // whose move it is
 let last = null;               // last played square index
 let gameOver = false;
+let history = [];              // played move indexes in order (for opening-book matching)
 
 const AI_DEPTH = 6;            // search depth for the engine's move. Bump for a harder engine.
 
@@ -95,6 +96,7 @@ function onCellClick(i) {
   if (!mv) return;
   board = Othello.makeMove(board, HUMAN, i, mv.flips);
   last = i;
+  history.push({ i });
   $('coach').classList.add('hidden');
   $('hint-coord').classList.add('hidden');
   render();
@@ -125,6 +127,7 @@ function drive() {
     } else if (Othello.hasAnyMove(board, mover)) {
       // opponent has no move but mover does -> opponent passes, mover moves again
       turn = mover;
+      history = [];                     // a pass breaks opening-book continuity
     } else {
       gameOver = true;                  // nobody can move — game over
       break;
@@ -151,6 +154,7 @@ function drive() {
     const mv = Othello.legalMoves(board, AI).find((m) => m.i === best.i);
     board = Othello.makeMove(board, AI, best.i, mv.flips);
     last = best.i;
+    history.push({ i: best.i });
     render();
   }
   if (gameOver) render();
@@ -163,8 +167,18 @@ function showHelp() {
   list.innerHTML = '';
   for (const p of picks) {
     const li = document.createElement('li');
+    const insights = (typeof Patterns !== 'undefined')
+      ? Patterns.forMove(board, HUMAN, p.i, { history })
+      : [];
+    const refs = (typeof Patterns !== 'undefined')
+      ? Patterns.refsForPick(p, insights)
+      : [];
     li.innerHTML = `<span class="coord">${p.coord}</span> · <span class="score">value ${(p.score).toFixed(1)}</span>` +
-      `<div class="why">${p.reason}</div>`;
+      `<div class="why">${p.reason}</div>` +
+      insights.map((ins) => `<div class="insight"><strong>${ins.name}.</strong> ${ins.text}</div>`).join('') +
+      (refs.length
+        ? `<div class="refs">📖 ` + refs.map((r) => `<a href="${r.url}" target="_blank" rel="noopener">${r.label}</a>`).join(' · ') + `</div>`
+        : '');
     li.addEventListener('mouseenter', () => setSuggest(p.i));
     li.addEventListener('mouseleave', () => clearSuggest());
     li.addEventListener('click', () => {
@@ -197,6 +211,7 @@ function reset() {
   turn = HUMAN;
   last = null;
   gameOver = false;
+  history = [];
   $('coach').classList.add('hidden');
   $('endgame').classList.add('hidden');
   $('hint-coord').classList.add('hidden');
