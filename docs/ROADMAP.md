@@ -35,10 +35,13 @@ from labeled data** using a large (position, final-score) corpus.
   mobility (frontier discs), and mid/endgame-appropriate weights.
 - **Verify:** benchmark vs Edax at equal depth; ELO should climb sharply.
 
-## Phase 3 — Opening book
+## Phase 3 — Opening book (engine strength)
 Transpose a real book (Edax `book-2008.htm`, or WZebra's, both permissive) so the
 engine handles theory openings without searching the first ~12–18 moves.
 - **Verify:** engine doesn't waste search on book moves; opening win rate up.
+- *Note: the coach already has its own 14-line teaching book for naming openings
+  (`src/patterns.js`, see `docs/COACH-PATTERNS.md`) — that's coaching, not
+  strength. This phase is about the engine playing book moves without search.*
 
 ## Phase 4 — Verify "master" (the gate)
 Benchmark vs Edax / WZebra and against the solved-perfect-play reference
