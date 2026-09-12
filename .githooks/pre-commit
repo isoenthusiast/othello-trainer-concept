@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# The cheap floor. Lives in .githooks/ so it travels with the branch; a fresh worktree keeps it.
+# Deliberately FAST: a slow gate is a bypassed gate.
+set -uo pipefail
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACM)
+if [ "${#staged[@]}" -eq 0 ]; then echo "[gate] nothing staged - skipping."; exit 0; fi
+echo "[gate] ${#staged[@]} staged file(s)"
+python3 .githooks/check_secrets.py "${staged[@]}" || exit 1
+python3 .githooks/check_syntax.py  "${staged[@]}" || exit 1
+git diff --cached --check || { echo "[gate] conflict markers or whitespace errors in the diff"; exit 1; }
+if [ -x .githooks/fast-checks.sh ]; then
+  echo "[gate] repo-specific fast checks"
+  .githooks/fast-checks.sh || exit 1
+fi
+echo "[gate] OK"
